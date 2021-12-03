@@ -1,5 +1,5 @@
 # Motorcycle Alarm
-A motorcycle alarm based on Toit, ESP32, and the LIS3DH MEMS accelerometer
+An ebryo to a motorcycle alarm based on Toit, ESP32, and the LIS3DH MEMS accelerometer
 
 # Prerequisites
 Requires Toit package for the LIS3DH accelerometer. Install this Toit package with
