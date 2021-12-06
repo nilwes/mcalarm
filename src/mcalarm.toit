@@ -44,9 +44,11 @@ main:
     // Calculate roll and pitch angles.
     roll  := (math.atan2 -filtered_acc[0]  filtered_acc[2]) * (180/math.PI)
     pitch := (math.atan2  filtered_acc[1]  (math.sqrt( filtered_acc[0]*filtered_acc[0] + filtered_acc[2]*filtered_acc[2] ))) * (180/math.PI)
-
-    display.lcd_write "Roll: $(%5.2f roll)  " 0 0
-    display.lcd_write "Pitch: $(%5.2f pitch)    " 1 0
+    
+    line1 := display.translate_to_rom_a_00 "Roll:  $(%3d roll.to_int)°   "
+    line2 := display.translate_to_rom_a_00 "Pitch: $(%3d pitch.to_int)°   "
+    display.lcd_write line1 0 0
+    display.lcd_write line2 1 0
     sleep --ms=200
   
   acc_sensor.disable
