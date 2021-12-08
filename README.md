@@ -37,7 +37,7 @@ You need the following parts:
 - ESP32 dev board
 - LIS3DH sensor
 - 1602 LCD
-- 10k (or something like that)
+- 10k potentiometer
  
 Here's the Fritzing diagram of the whole hardware setup. Note that the Adafruit LIS3DH breakout board contain circuitry that allows you to hook it up to either 3v3 or 5V.
 
