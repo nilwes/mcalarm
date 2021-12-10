@@ -1,31 +1,30 @@
 # A Toit-powered motorcycle alarm
 
-The [LIS3DH accelerometer](https://www.st.com/en/mems-and-sensors/lis3dh.html) is a MEMS accelerometer with nice specs. It can easily be interfaced to an ESP32 using I2C along with the classic [HD44780-powered 16x2 character LCD](https://www.adafruit.com/product/181). The idea is to build a motorcycle alarm that, when the motorcycle is moved, reacts and sends an alert somewhere. Initially we'll get the accelerometer and LCD up and running!
+The [LIS3DH accelerometer](https://www.st.com/en/mems-and-sensors/lis3dh.html) is a MEMS accelerometer with nice specs. It can easily be interfaced to an ESP32 using I2C along with the classic [HD44780-powered 16x2 character LCD](https://www.adafruit.com/product/181). The idea is to build a motorcycle flight computer that tracks
+- Lean angle, including storage of max lean angle
+- Wheelie angle
+- Acceleration
+In addition, the flight computer should react and send an alert somewhere, if the bike moves when it shouldn't.
 
-Future features may include
-- horizontal acceleration (positive/negative),
-- lean angle,
-- ...and of course a wheelie tracker.
+Future features to be implemented:
+- Alerts if unauthorized movement.
+- Posting of data to a backend.
 
 # Steps
 
 ## 1. Get the source code
 
-Clone the repositories in a suitable directory:
+Clone the mcalarm repository into a suitable directory:
 
 ``` sh
 git clone https://github.com/nilwes/mcalarm
-git clone https://github.com/toitlang/toit.git
 ```
-You should now have two additional directories: `mcalarm/` and `toit/`.
 
 You also need the Toit packages for the LIS3DH accelerometer and the LCD. Step into the `mcalarm` folder and install these packages with
 ```sh
 toit pkg install github.com/nilwes/LIS3DH
 toit pkg install github.com/nilwes/HD44780
 ```
-
-
 
 ## 2. Set up the build environment for Toit
 
@@ -99,4 +98,3 @@ Once you have changed the example, you need to build and run the demo again from
 
 
 https://user-images.githubusercontent.com/58735688/144624555-0b378002-9d66-42e3-afc0-d8f51851ceb0.mov
-
