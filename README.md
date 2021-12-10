@@ -4,6 +4,7 @@ The [LIS3DH accelerometer](https://www.st.com/en/mems-and-sensors/lis3dh.html) i
 - Lean angle, including storage of max lean angle
 - Wheelie angle
 - Acceleration
+
 In addition, the flight computer should react and send an alert somewhere, if the bike moves when it shouldn't.
 
 Future features to be implemented:
