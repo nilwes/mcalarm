@@ -1,14 +1,8 @@
 # A Toit-powered motorcycle flight tracker
 
-The [LIS3DH accelerometer](https://www.st.com/en/mems-and-sensors/lis3dh.html) is a MEMS accelerometer with nice specs. It can easily be interfaced to an ESP32 using I2C along with the classic [HD44780-powered 16x2 character LCD](https://www.adafruit.com/product/181). The idea is to build a motorcycle flight computer that tracks
-- Lean angle, including storage of max lean angle
-- Wheelie angle
-- Acceleration
-
-In addition, the flight computer should react and send an alert somewhere, if the bike moves when it shouldn't.
+The [LIS3DH accelerometer](https://www.st.com/en/mems-and-sensors/lis3dh.html) is a MEMS accelerometer with nice specs. It can easily be interfaced to an ESP32 using I2C along with the classic [HD44780-powered 16x2 character LCD](https://www.adafruit.com/product/181). The idea is to build a motorcycle alarm that tracks movement and sends alerts.
 
 Future features to be implemented:
-- Alerts if unauthorized movement.
 - Posting of data to a backend.
 
 # Steps
