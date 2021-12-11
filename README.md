@@ -5,6 +5,7 @@ The [LIS3DH accelerometer](https://www.st.com/en/mems-and-sensors/lis3dh.html) i
 Future features to be implemented:
 - Posting of data to a backend.
 - The addition of more advanced sensor (gyroscope) would allow for lean angle calculation.
+- GPS tracking.
 
 # Steps
 
