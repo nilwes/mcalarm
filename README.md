@@ -4,8 +4,7 @@ The idea is to build a motorcycle alarm that tracks movement and sends alerts. W
 
 Future features to be implemented:
 - Cellular connectivity
-- Posting of position data to a backend.
-- GPS tracking.
+- Adding GPS and posting position data to a backend.
 
 
 # Requirements
