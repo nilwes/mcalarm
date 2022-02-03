@@ -3,6 +3,7 @@
 The idea is to build a motorcycle alarm that tracks movement and sends alerts. While driving, information about wheelie angle and lateral/longitudinal acceleration should be displayed on a 128x64 OLED driven by SSD1309. The sensor used is the versatile BNO055 from Bosch.
 
 Future features to be implemented:
+- Cellular connectivity
 - Posting of position data to a backend.
 - GPS tracking.
 
