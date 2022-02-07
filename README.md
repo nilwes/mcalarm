@@ -25,6 +25,7 @@ toit pkg install github.com/toitware/toit-pixel-display
 toit pkg install github.com/nilwes/bno055
 toit pkg install github.com/toitware/cellular
 toit pkg install github.com/toitware/sequans-cellular
+toit pkg install github.com/toitlang/pkg-http
 ```
 
 # Picture or it didn't happen
