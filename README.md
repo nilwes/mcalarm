@@ -22,10 +22,12 @@ Three Toit packages are needed to run this: The display drivers and the driver f
 toit pkg install github.com/toitware/toit-ssd1306
 toit pkg install github.com/toitware/toit-pixel-display
 toit pkg install github.com/nilwes/bno055
+toit pkg install github.com/toitware/cellular
+toit pkg install github.com/toitware/sequans-cellular
 ```
 
 # Picture or it didn't happen
 
 
-https://user-images.githubusercontent.com/58735688/151519221-e18f3c11-b5ff-43cd-9470-f8e6a0ca4a62.mov
+https://user-images.githubusercontent.com/58735688/152804440-ca274395-2c8a-4c99-a96e-e9d9b57f59fd.mp4
 
