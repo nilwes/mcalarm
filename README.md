@@ -4,6 +4,7 @@ The idea is to build a motorcycle alarm that tracks movement and sends alerts. W
 
 Future features to be implemented:
 - Adding GPS and posting position data to a backend.
+- Deep sleep if the alarm is armed. Wake-on-movement.
 
 
 # Requirements
