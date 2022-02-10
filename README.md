@@ -18,7 +18,7 @@ https://github.com/toitlang/toit
 I strongly recommend using Toit's tool Jaguar with live reloading of your code. Save your Toit file and two seconds later your code runs on your ESP32. Find instructions here:
 https://github.com/toitlang/jaguar
 
-Three Toit packages are needed to run this: The display drivers and the driver for the BNO055 sensor. Install them with the following toit commands:
+Three Toit packages are needed to run this are listet below. Install them with the following toit commands:
 ```
 toit pkg install github.com/toitware/toit-ssd1306
 toit pkg install github.com/toitware/toit-pixel-display
@@ -32,5 +32,5 @@ toit pkg install github.com/toitware/toit-cert-roots
 # Picture or it didn't happen
 
 
-https://user-images.githubusercontent.com/58735688/152804440-ca274395-2c8a-4c99-a96e-e9d9b57f59fd.mp4
+https://user-images.githubusercontent.com/58735688/153473930-15be1c03-8221-494a-beda-8ade624f793e.mov
 
