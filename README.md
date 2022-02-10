@@ -26,6 +26,7 @@ toit pkg install github.com/nilwes/bno055
 toit pkg install github.com/toitware/cellular
 toit pkg install github.com/toitware/sequans-cellular
 toit pkg install github.com/toitlang/pkg-http
+toit pkg install github.com/toitware/toit-cert-roots
 ```
 
 # Picture or it didn't happen
