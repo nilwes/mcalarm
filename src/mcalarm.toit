@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Toitware ApS. All rights reserved.
+// Copyright (C) 2021 Toitware ApS. All rights reserved.
 // Use of this source code is governed by a MIT-style license that can be found
 // in the LICENSE file.
 
@@ -8,6 +8,8 @@ import log
 import net
 import uart
 import sequans_cellular.monarch show Monarch
+import certificate_roots
+
 
 import .bno055
 import font show *
@@ -43,8 +45,9 @@ RSTpin := gpio.Pin 25 --output
 ARMpin := gpio.Pin 26 --input
 CALIBpin := gpio.Pin 33 --input
 
-main:
+movement_threshold ::= 1
 
+main:
   spi_bus := spi.Bus
     --mosi=gpio.Pin  22  // SDA
     --clock=gpio.Pin 15  // SCL
@@ -79,6 +82,7 @@ main:
   calib_pin := 0
   calib_pitch := 0
 
+  //Connect to cellular
   display.remove_all
   display.text sans_context_08 1 10 "Connecting to cellular net..."
   display.draw
@@ -91,6 +95,7 @@ main:
 
   while true:
     arm_pin = ARMpin.get
+    sleep --ms=200 //to avoid detecing movement due to toggle switch 
     if arm_pin == 1:
       armed_state arm_pin display sans_context_10 sans_context_08 network_interface sensor
 
@@ -138,17 +143,20 @@ armed_state arm_pin display sans_context_10 sans_context_08 network_interface se
   sent_alert := 0
   linacc := [0.0, 0.0, 0.0]
   sleep --ms=10
-  arm_pin = ARMpin.get
+  //arm_pin = ARMpin.get
   display.remove_all
   display.text sans_context_10 10 15 "ALARM ARMED!"
   display.draw
 
   while arm_pin == 1:
     linacc = sensor.read_linear_acceleration
-    if (math.sqrt ((linacc[0] * linacc[0] + linacc[1] * linacc[1] + linacc[2] * linacc[2]).abs)) > 5:
+    tot_acc := math.sqrt ((linacc[0] * linacc[0] + linacc[1] * linacc[1] + linacc[2] * linacc[2]).abs)
+    txt := display.text sans_context_08 42 25 "Acc: $(%.1f (tot_acc-0.29).abs)" // -.29 to remove noise
+    display.draw
+    if (math.sqrt ((linacc[0] * linacc[0] + linacc[1] * linacc[1] + linacc[2] * linacc[2]).abs)) > movement_threshold:
       if sent_alert == 0:
-        display.text sans_context_08 15 30 "Movement detected"
-        display.text sans_context_08 25 45 "Sending alert..."
+        display.text sans_context_08 15 35 "Movement detected"
+        display.text sans_context_08 25 48 "Sending alert..."
         display.draw
         //send_alert_rpi network_interface
         send_alert_twilio network_interface
@@ -157,7 +165,8 @@ armed_state arm_pin display sans_context_10 sans_context_08 network_interface se
         sent_alert = 1
         //start GPS tracking here...
       
-    sleep --ms=100
+    sleep --ms=250
+    display.remove txt
     arm_pin = ARMpin.get
   
   //if switch is reset
@@ -203,31 +212,28 @@ connect driver/cellular.Cellular -> bool:
   return true
 
 send_alert_twilio network_interface/net.Interface:
-  my_host := "api.twilio.com"
-  my_port := 80
+  my_host ::= "api.twilio.com"
+  my_port ::= 443
+  credentials := base64.encode "my:twiliocredentials"
+  data := "To=+4623456789From=+123456789&MessagingServiceSid=MyMessageSid&Body=Motorcycle movement detected!".to_byte_array
 
-  credentials := base64.encode "my:credentials"
-  client := http.Client network_interface
+  client := http.Client.tls network_interface
+      --root_certificates=[certificate_roots.DIGICERT_GLOBAL_ROOT_CA]
   headers := http.Headers
-  data:="To=+4612345678&From=+123456789&Body=test".to_byte_array
-  headers.set "Authentication" "Basic $credentials"
-  client.post
+  headers.set "Authorization" "Basic $credentials"
+  headers.set "Content-Type" "application/x-www-form-urlencoded"
+
+  response := client.post
     data
     --host=my_host 
     --port=my_port
-    --path="2010-04-01/Accounts/myAccountId/Messages.json"
-    --headers=headers 
+    --path="/2010-04-01/Accounts/MyAccountId/Messages.json"
+    --headers=headers
 
-send_alert_rpi network_interface/net.Interface:
-  my_host := "my.server.url"
-  my_port := 8008
+  print_ "HTTP Response code: $response.status_code"
 
-  client := http.Client network_interface
-  headers := http.Headers
-  data:="".to_byte_array
+  data2 := #[]
+  while chunk := response.body.read: 
+    data2 += chunk
+  print_ data2.to_string
 
-  client.post
-    data
-    --host=my_host 
-    --port=my_port
-    --path="/send_alert.php"
