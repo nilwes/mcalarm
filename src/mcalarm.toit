@@ -11,7 +11,7 @@ import sequans_cellular.monarch show Monarch
 import certificate_roots
 
 
-import .bno055
+import bno055
 import font show *
 import font.x11_100dpi.sans.sans_08 as chars08
 import font.x11_100dpi.sans.sans_10 as chars10
