@@ -21,6 +21,7 @@ https://github.com/toitlang/jaguar
 Three Toit packages are needed to run this are listet below. Install them with the following toit commands:
 ```
 toit pkg install github.com/toitware/toit-ssd1306
+toit pkg install github.com/nilwes/bno055
 toit pkg install github.com/toitware/toit-pixel-display
 toit pkg install github.com/nilwes/bno055
 toit pkg install github.com/toitware/cellular
