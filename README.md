@@ -32,6 +32,5 @@ toit pkg install github.com/toitware/toit-cert-roots
 
 # Picture or it didn't happen
 
-
-https://user-images.githubusercontent.com/58735688/153473930-15be1c03-8221-494a-beda-8ade624f793e.mov
+https://user-images.githubusercontent.com/58735688/153921074-399c3a40-8d7e-4ecb-b3c3-12848e5c9c9e.mov
 
