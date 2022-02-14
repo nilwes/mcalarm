@@ -10,7 +10,6 @@ import uart
 import sequans_cellular.monarch show Monarch
 import certificate_roots
 
-
 import bno055
 import font show *
 import font.x11_100dpi.sans.sans_08 as chars08
@@ -21,6 +20,7 @@ import i2c
 import ssd1306
 import pixel_display show *
 import pixel_display.two_color show *
+import pixel_display.histogram show *
 
 import encoding.base64
 import math
@@ -60,7 +60,8 @@ main:
    --sda=gpio.Pin 12
    --scl=gpio.Pin 13
    --frequency=100000
-
+  
+  oled_scale := 6
 
   i2c_device := i2c_bus.device I2C_ADDRESS
   sensor := bno055 i2c_device
@@ -70,6 +71,10 @@ main:
   display.background = BLACK
   sans_context_08 := display.context --landscape --font=sans08 --color=WHITE
   sans_context_10 := display.context --landscape --font=sans10 --color=WHITE
+  plus_histo  := TwoColorHistogram --x=1 --y=25 --width=128 --height=19 --transform=display.landscape --scale=oled_scale --color=WHITE
+  display.add plus_histo
+  minus_histo := TwoColorHistogram --x=1 --y=44 --width=128 --height=19 --transform=display.landscape --scale=oled_scale --color=WHITE --reflected
+  display.add minus_histo
 
   euler        := [0.0,0.0,0.0]
   linacc       := [0.0, 0.0, 0.0]
@@ -82,7 +87,9 @@ main:
   calib_pin := 0
   calib_pitch := 0
 
-  //Connect to cellular
+  network_interface := net.open
+
+  Connect to cellular
   display.remove_all
   display.text sans_context_08 1 10 "Connecting to cellular net..."
   display.draw
@@ -92,26 +99,40 @@ main:
   display.text sans_context_08 1 23 "Connected!"
   display.draw
   sleep --ms=500
+  display.remove_all
+  
+  display.text sans_context_08 1  10 "Wheelie angle:"
+  display.text sans_context_08 1  22 "Acc/Break:"
+  pitch_text := display.text sans_context_08 80 10 "0°"
+  x_acc_text := display.text sans_context_08 50 22 "0.0"
 
   while true:
     arm_pin = ARMpin.get
-    sleep --ms=200 //to avoid detecing movement due to toggle switch 
+    sleep --ms=1 //to avoid detecing movement due to toggle switch.
     if arm_pin == 1:
       armed_state arm_pin display sans_context_10 sans_context_08 network_interface sensor
+      //Re-initialize display text objects after returning from armed_state.
+      display.text sans_context_08 1  10 "Wheelie angle:"
+      display.text sans_context_08 1  22 "Acc/Break:"
+      pitch_text = display.text sans_context_08 80 10 ""
+      x_acc_text = display.text sans_context_08 50 22 ""
+      plus_histo  = TwoColorHistogram --x=1 --y=25 --width=128 --height=19 --transform=display.landscape --scale=oled_scale --color=WHITE
+      display.add plus_histo
+      minus_histo = TwoColorHistogram --x=1 --y=44 --width=128 --height=19 --transform=display.landscape --scale=oled_scale --color=WHITE --reflected
+      display.add minus_histo
 
     euler        = sensor.read_euler
     linacc       = sensor.read_linear_acceleration
     
-    print_ "$(%6.1d euler[0]), $(%6.1d euler[1]), $(%6.1d euler[2])"
+    //print_ "$(%6.1d euler[0]), $(%6.1d euler[1]), $(%6.1d euler[2])"
     pitch := -1 * euler[1].to_int
-    y_acc := -1 * linacc[1].to_int 
-    x_acc := -1 * linacc[0].to_int // -1 <--- Change axis orientation
+    x_acc := -1 * linacc[0] // -1 <--- Change axis orientation.
     
     if CALIBpin.get == 1:
       print_ "Calibrating..."
       calib_pitch = pitch
       max_pitch = max_acc = max_break = 0.0
-
+      sleep --ms=500 //avoid reading button press bounce acceleration.
 
     pitch = pitch - calib_pitch
     
@@ -119,31 +140,33 @@ main:
       if pitch > max_pitch:
         max_pitch = pitch
     
-    if x_acc >= 0:        // Save max acceleration
+    if x_acc >= 0:        // Save max acceleration.
       if x_acc > max_acc:
         max_acc = x_acc
-    else:                 // Save max deceleration
+    else:                 // Save max deceleration.
       if x_acc < max_break:
         max_break = x_acc
 
-    display.remove_all
-    display.text sans_context_08 1  10 "Wheelie angle:"
-    display.text sans_context_08 105 10 "$(%4d pitch)°" 
-    display.text sans_context_08 1  22 "Longitudinal acc:"
-    display.text sans_context_08 105 22 "$(%5.1f x_acc)"
-    display.text sans_context_08 1  34 "Lateral acc:"
-    display.text sans_context_08 105 34 "$(%5.1f y_acc)" 
-    display.text sans_context_10 20 55 "$(%2d max_pitch)° / $(%3f max_acc) / $(%4f max_break)" 
-    display.draw
-    sleep --ms=10
+    pitch_text.text = "$(%4d pitch)° / $(%2d max_pitch)°"
+    x_acc_text.text = "$(%5.1f x_acc) / $(%3.1f max_acc) / $(%3.1f max_break)"
 
-    driver.close
+    print_ x_acc
+
+    if x_acc < 0.1 and x_acc > -0.1 : x_acc = 0.2
+    if x_acc >= 0.0: 
+      plus_histo.add x_acc
+      minus_histo.add 0       //force scroll of negative histogram.
+    else: 
+      plus_histo.add 0        //force scroll of positive histogram.
+      minus_histo.add -x_acc
+    display.draw
+
 
 armed_state arm_pin display sans_context_10 sans_context_08 network_interface sensor:
   sent_alert := 0
   linacc := [0.0, 0.0, 0.0]
   sleep --ms=10
-  //arm_pin = ARMpin.get
+
   display.remove_all
   display.text sans_context_10 10 15 "ALARM ARMED!"
   display.draw
@@ -168,12 +191,13 @@ armed_state arm_pin display sans_context_10 sans_context_08 network_interface se
     sleep --ms=250
     display.remove txt
     arm_pin = ARMpin.get
-  
+
   //if switch is reset
   display.remove_all
   display.text sans_context_10 10 14 "Disarming Alarm"
   display.draw
   sleep --ms=2000
+  display.remove_all
 
 create_driver -> Monarch:
   pwr_on := gpio.Pin PWR_ON_NUM
@@ -214,8 +238,8 @@ connect driver/cellular.Cellular -> bool:
 send_alert_twilio network_interface/net.Interface:
   my_host ::= "api.twilio.com"
   my_port ::= 443
-  credentials := base64.encode "my:twiliocredentials"
-  data := "To=+4623456789From=+123456789&MessagingServiceSid=MyMessageSid&Body=Motorcycle movement detected!".to_byte_array
+  credentials := base64.encode "mytwilio:credentials"
+  data := "To=+46123456789&From=+1123456789&MessagingServiceSid=MyMessagingServiceSID&Body=Motorcycle movement detected!".to_byte_array
 
   client := http.Client.tls network_interface
       --root_certificates=[certificate_roots.DIGICERT_GLOBAL_ROOT_CA]
@@ -227,7 +251,7 @@ send_alert_twilio network_interface/net.Interface:
     data
     --host=my_host 
     --port=my_port
-    --path="/2010-04-01/Accounts/MyAccountId/Messages.json"
+    --path="/2010-04-01/Accounts/MyTwilioAccountID/Messages.json"
     --headers=headers
 
   print_ "HTTP Response code: $response.status_code"
@@ -236,4 +260,3 @@ send_alert_twilio network_interface/net.Interface:
   while chunk := response.body.read: 
     data2 += chunk
   print_ data2.to_string
-
