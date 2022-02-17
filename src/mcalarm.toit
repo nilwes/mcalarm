@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Toitware ApS. All rights reserved.
+// Copyright (C) 2022 Toitware ApS. All rights reserved.
 // Use of this source code is governed by a MIT-style license that can be found
 // in the LICENSE file.
 
@@ -10,7 +10,9 @@ import uart
 import sequans_cellular.monarch show Monarch
 import certificate_roots
 
-import bno055
+import ublox_gnss
+
+import .bno055
 import font show *
 import font.x11_100dpi.sans.sans_08 as chars08
 import font.x11_100dpi.sans.sans_10 as chars10
@@ -41,11 +43,17 @@ logger ::= log.default
 sans08 ::= Font [chars08.ASCII, chars08.LATIN_1_SUPPLEMENT, chars08.CURRENCY_SYMBOLS]
 sans10 ::= Font [chars10.ASCII, chars10.LATIN_1_SUPPLEMENT, chars10.CURRENCY_SYMBOLS]
 
+sans_context_08 := 0
+sans_context_10 := 0
+
 RSTpin := gpio.Pin 25 --output 
 ARMpin := gpio.Pin 26 --input
 CALIBpin := gpio.Pin 33 --input
 
 movement_threshold ::= 1
+arm_pin := 0
+cellular_network_interface := 0
+cellular_driver := 0
 
 main:
   spi_bus := spi.Bus
@@ -62,15 +70,19 @@ main:
    --frequency=100000
   
   oled_scale := 6
+  oled_x := 1
+  oled_y := 25
+  oled_w := 127
+  oled_h := 63 - oled_y
 
-  i2c_device := i2c_bus.device I2C_ADDRESS
-  sensor := bno055 i2c_device
+  oled_device := i2c_bus.device I2C_ADDRESS
+  sensor := bno055 oled_device
 
-  driver := ssd1306.SpiSSD1306 oled --reset=RSTpin
-  display := TwoColorPixelDisplay driver
+  oled_driver := ssd1306.SpiSSD1306 oled --reset=RSTpin
+  display := TwoColorPixelDisplay oled_driver
   display.background = BLACK
-  sans_context_08 := display.context --landscape --font=sans08 --color=WHITE
-  sans_context_10 := display.context --landscape --font=sans10 --color=WHITE
+  sans_context_08 = display.context --landscape --font=sans08 --color=WHITE
+  sans_context_10 = display.context --landscape --font=sans10 --color=WHITE
   plus_histo  := TwoColorHistogram --x=1 --y=25 --width=128 --height=19 --transform=display.landscape --scale=oled_scale --color=WHITE
   display.add plus_histo
   minus_histo := TwoColorHistogram --x=1 --y=44 --width=128 --height=19 --transform=display.landscape --scale=oled_scale --color=WHITE --reflected
@@ -83,23 +95,10 @@ main:
   max_acc      := 0.0
   max_break    := 0.0
 
-  arm_pin := 0
   calib_pin := 0
   calib_pitch := 0
 
   network_interface := net.open
-
-  Connect to cellular
-  display.remove_all
-  display.text sans_context_08 1 10 "Connecting to cellular net..."
-  display.draw
-  cellular_driver := create_driver
-  if not connect cellular_driver: return
-  network_interface := cellular_driver.network_interface
-  display.text sans_context_08 1 23 "Connected!"
-  display.draw
-  sleep --ms=500
-  display.remove_all
   
   display.text sans_context_08 1  10 "Wheelie angle:"
   display.text sans_context_08 1  22 "Acc/Break:"
@@ -108,9 +107,8 @@ main:
 
   while true:
     arm_pin = ARMpin.get
-    sleep --ms=1 //to avoid detecing movement due to toggle switch.
-    if arm_pin == 1:
-      armed_state arm_pin display sans_context_10 sans_context_08 network_interface sensor
+    if arm_pin == 1: //go into armed state
+      armed_state display sensor i2c_bus
       //Re-initialize display text objects after returning from armed_state.
       display.text sans_context_08 1  10 "Wheelie angle:"
       display.text sans_context_08 1  22 "Acc/Break:"
@@ -124,15 +122,14 @@ main:
     euler        = sensor.read_euler
     linacc       = sensor.read_linear_acceleration
     
-    //print_ "$(%6.1d euler[0]), $(%6.1d euler[1]), $(%6.1d euler[2])"
     pitch := -1 * euler[1].to_int
     x_acc := -1 * linacc[0] // -1 <--- Change axis orientation.
     
     if CALIBpin.get == 1:
       print_ "Calibrating..."
+      sleep --ms=500 //avoid reading button press bounce acceleration.
       calib_pitch = pitch
       max_pitch = max_acc = max_break = 0.0
-      sleep --ms=500 //avoid reading button press bounce acceleration.
 
     pitch = pitch - calib_pitch
     
@@ -152,45 +149,56 @@ main:
 
     print_ x_acc
 
-    if x_acc < 0.1 and x_acc > -0.1 : x_acc = 0.2
+    if x_acc < 0.1 and x_acc > -0.1 : x_acc = 0.2 //
     if x_acc >= 0.0: 
       plus_histo.add x_acc
       minus_histo.add 0       //force scroll of negative histogram.
     else: 
       plus_histo.add 0        //force scroll of positive histogram.
       minus_histo.add -x_acc
+    
     display.draw
+  
+    sleep --ms=5 //to avoid watchdog timer
 
-
-armed_state arm_pin display sans_context_10 sans_context_08 network_interface sensor:
+armed_state display sensor i2c_bus:
   sent_alert := 0
+  acc_txt := 0
   linacc := [0.0, 0.0, 0.0]
-  sleep --ms=10
 
   display.remove_all
-  display.text sans_context_10 10 15 "ALARM ARMED!"
+  alarm_armed_text := display.text sans_context_10 10 15 "ALARM ARMED!"
   display.draw
 
   while arm_pin == 1:
     linacc = sensor.read_linear_acceleration
     tot_acc := math.sqrt ((linacc[0] * linacc[0] + linacc[1] * linacc[1] + linacc[2] * linacc[2]).abs)
-    txt := display.text sans_context_08 42 25 "Acc: $(%.1f (tot_acc-0.29).abs)" // -.29 to remove noise
+    if sent_alert == 0 : acc_txt = display.text sans_context_10 42 45 "Acc: $(%.1f (tot_acc-0.29).abs)" // -.29 to remove noise
     display.draw
     if (math.sqrt ((linacc[0] * linacc[0] + linacc[1] * linacc[1] + linacc[2] * linacc[2]).abs)) > movement_threshold:
       if sent_alert == 0:
-        display.text sans_context_08 15 35 "Movement detected"
-        display.text sans_context_08 25 48 "Sending alert..."
+        display.remove acc_txt
+        movement_detected_text := display.text sans_context_08 1 27 "Movement detected!" //15 27
         display.draw
-        //send_alert_rpi network_interface
-        send_alert_twilio network_interface
-        display.text sans_context_08 35 60 "Alert sent"
+        //Connect to cellular and send alert
+        connect_cellular_text := display.text sans_context_08 1 39 "Connecting to cellular net..." //1 39
         display.draw
+        connect_to_cellular
+        sending_alert_text :=display.text sans_context_08 1 51 "Sending alert..." //25 51
+        send_alert_twilio cellular_network_interface "Motorcycle movement detected!"
+        display.remove sending_alert_text
+        alert_sent_text := display.text sans_context_08 1 39 "Alert sent" //35 39
+        display.draw
+        display.remove connect_cellular_text
+        display.remove sending_alert_text
         sent_alert = 1
-        //start GPS tracking here...
+        //Start GPS tracking
+        track_position i2c_bus display
       
     sleep --ms=250
-    display.remove txt
+    display.remove acc_txt
     arm_pin = ARMpin.get
+  
 
   //if switch is reset
   display.remove_all
@@ -198,6 +206,51 @@ armed_state arm_pin display sans_context_10 sans_context_08 network_interface se
   display.draw
   sleep --ms=2000
   display.remove_all
+  cellular_driver.close
+
+track_position i2c_bus display:
+  location := null
+  position_reporting_interval := 20 //seconds, roughly.
+  counter := 10 
+  counter2 := 0
+  gps_device := i2c_bus.device ublox_gnss.I2C_ADDRESS
+  gps_driver := ublox_gnss.Driver
+    ublox_gnss.Reader gps_device
+    ublox_gnss.Writer gps_device
+  print_ "Getting position..."
+  position_text := display.text sans_context_08 12 61 "Aquiring GPS signal"
+  display.draw
+  while location == null:
+    location = gps_driver.location //--blocking
+    display.remove position_text
+    position_text = display.text sans_context_08 1 61 "Aquiring GPS signal - $counter2"
+    display.draw
+    sleep --ms=1000
+    counter2 += 1
+  
+  print_ "TTFF: $(gps_driver.time_to_first_fix)"
+  while arm_pin == 1:
+    print_ "Location: $location"
+    display.remove position_text
+    display.text sans_context_08 1 50 "Last known position:"
+    position_text = display.text sans_context_08 1 62 "$counter-$location.stringify" //"55.60357N, 13.01929E" //location.stringify
+    display.draw
+    if counter % position_reporting_interval == 0: 
+      display.remove position_text
+      position_text = display.text sans_context_08 1 62 "Transmitting..."
+      display.draw
+      send_alert_twilio cellular_network_interface "Last known motorcycle location: $location.stringify"
+      counter = position_reporting_interval
+    sleep --ms=1000
+    arm_pin = ARMpin.get
+    location = gps_driver.location //--blocking
+    counter -= 1
+  gps_driver.close
+
+connect_to_cellular:
+  cellular_driver = create_driver
+  if not connect cellular_driver: return
+  cellular_network_interface = cellular_driver.network_interface
 
 create_driver -> Monarch:
   pwr_on := gpio.Pin PWR_ON_NUM
@@ -235,11 +288,11 @@ connect driver/cellular.Cellular -> bool:
         return false
   return true
 
-send_alert_twilio network_interface/net.Interface:
+send_alert_twilio network_interface/net.Interface message/string:
   my_host ::= "api.twilio.com"
   my_port ::= 443
   credentials := base64.encode "mytwilio:credentials"
-  data := "To=+46123456789&From=+1123456789&MessagingServiceSid=MyMessagingServiceSID&Body=Motorcycle movement detected!".to_byte_array
+  data := "To=+461234567890&From=+11234567890&MessagingServiceSid=MySidID&Body=$message".to_byte_array
 
   client := http.Client.tls network_interface
       --root_certificates=[certificate_roots.DIGICERT_GLOBAL_ROOT_CA]
@@ -251,7 +304,7 @@ send_alert_twilio network_interface/net.Interface:
     data
     --host=my_host 
     --port=my_port
-    --path="/2010-04-01/Accounts/MyTwilioAccountID/Messages.json"
+    --path="/2010-04-01/Accounts/MyAccountID/Messages.json"
     --headers=headers
 
   print_ "HTTP Response code: $response.status_code"
