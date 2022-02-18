@@ -52,8 +52,8 @@ CALIBpin := gpio.Pin 33 --input
 
 movement_threshold ::= 1
 arm_pin := 0
-cellular_network_interface := 0
-cellular_driver := 0
+cellular_network_interface := null
+cellular_driver := null
 
 main:
   spi_bus := spi.Bus
@@ -63,17 +63,12 @@ main:
     --cs=gpio.Pin 4
     --frequency=1_000_000
     --dc=gpio.Pin 2
-
   i2c_bus := i2c.Bus
    --sda=gpio.Pin 12
    --scl=gpio.Pin 13
    --frequency=100000
   
   oled_scale := 6
-  oled_x := 1
-  oled_y := 25
-  oled_w := 127
-  oled_h := 63 - oled_y
 
   oled_device := i2c_bus.device I2C_ADDRESS
   sensor := bno055 oled_device
@@ -107,6 +102,7 @@ main:
 
   while true:
     arm_pin = ARMpin.get
+    //sleep --ms=1 //to avoid detecing movement due to toggle switch.
     if arm_pin == 1: //go into armed state
       armed_state display sensor i2c_bus
       //Re-initialize display text objects after returning from armed_state.
@@ -122,6 +118,7 @@ main:
     euler        = sensor.read_euler
     linacc       = sensor.read_linear_acceleration
     
+    //print_ "$(%6.1d euler[0]), $(%6.1d euler[1]), $(%6.1d euler[2])"
     pitch := -1 * euler[1].to_int
     x_acc := -1 * linacc[0] // -1 <--- Change axis orientation.
     
@@ -162,10 +159,10 @@ main:
     sleep --ms=5 //to avoid watchdog timer
 
 armed_state display sensor i2c_bus:
-  sent_alert := 0
+  sent_alert := 0 
   acc_txt := 0
   linacc := [0.0, 0.0, 0.0]
-
+ 
   display.remove_all
   alarm_armed_text := display.text sans_context_10 10 15 "ALARM ARMED!"
   display.draw
@@ -210,7 +207,7 @@ armed_state display sensor i2c_bus:
 
 track_position i2c_bus display:
   location := null
-  position_reporting_interval := 20 //seconds, roughly.
+  position_reporting_interval := 10 //seconds, roughly.
   counter := 10 
   counter2 := 0
   gps_device := i2c_bus.device ublox_gnss.I2C_ADDRESS
@@ -220,13 +217,14 @@ track_position i2c_bus display:
   print_ "Getting position..."
   position_text := display.text sans_context_08 12 61 "Aquiring GPS signal"
   display.draw
-  while location == null:
+  while location == null and arm_pin == 1:
     location = gps_driver.location //--blocking
     display.remove position_text
-    position_text = display.text sans_context_08 1 61 "Aquiring GPS signal - $counter2"
+    position_text = display.text sans_context_08 1 61 "Aquiring GPS signal - $counter2 s"
     display.draw
     sleep --ms=1000
     counter2 += 1
+    arm_pin = ARMpin.get
   
   print_ "TTFF: $(gps_driver.time_to_first_fix)"
   while arm_pin == 1:
@@ -248,7 +246,7 @@ track_position i2c_bus display:
   gps_driver.close
 
 connect_to_cellular:
-  cellular_driver = create_driver
+  if not cellular_driver: cellular_driver = create_driver
   if not connect cellular_driver: return
   cellular_network_interface = cellular_driver.network_interface
 
@@ -291,8 +289,8 @@ connect driver/cellular.Cellular -> bool:
 send_alert_twilio network_interface/net.Interface message/string:
   my_host ::= "api.twilio.com"
   my_port ::= 443
-  credentials := base64.encode "mytwilio:credentials"
-  data := "To=+461234567890&From=+11234567890&MessagingServiceSid=MySidID&Body=$message".to_byte_array
+  credentials := base64.encode "twiliousername:twiliopwd"
+  data := "To=+46123456789&From=+1123456789&MessagingServiceSid=MyServiceSID&Body=$message".to_byte_array
 
   client := http.Client.tls network_interface
       --root_certificates=[certificate_roots.DIGICERT_GLOBAL_ROOT_CA]
@@ -304,7 +302,7 @@ send_alert_twilio network_interface/net.Interface message/string:
     data
     --host=my_host 
     --port=my_port
-    --path="/2010-04-01/Accounts/MyAccountID/Messages.json"
+    --path="/2010-04-01/Accounts/MyTwilioAccountID/Messages.json"
     --headers=headers
 
   print_ "HTTP Response code: $response.status_code"
