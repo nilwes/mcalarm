@@ -1,10 +1,10 @@
 # A Toit-powered motorcycle alarm
 
-The idea is to build a motorcycle alarm that tracks movement and sends alerts. While driving, information about wheelie angle and lateral/longitudinal acceleration should be displayed on a 128x64 OLED driven by SSD1309. The sensor used is the versatile BNO055 from Bosch. A toggle switch arms the alarm and if the bike moves while the alarm is armed, a text message is sent.
+The idea is to build a motorcycle alarm that tracks movement and sends alerts. While driving, information about wheelie angle and lateral/longitudinal acceleration should be displayed on a 128x64 OLED driven by SSD1309. The sensor used is the versatile BNO055 from Bosch. A toggle switch arms the alarm and if the bike moves while the alarm is armed, a text message is sent and position reporting to a Google Sheet commences.
 
 Future features to be implemented:
-- Adding GPS and posting position data to a backend.
 - Deep sleep if the alarm is armed. Wake-on-movement.
+- Graphical tracking of position
 
 
 # Requirements
