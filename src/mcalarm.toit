@@ -9,6 +9,10 @@ import net
 import uart
 import sequans_cellular.monarch show Monarch
 import certificate_roots
+import tls
+
+import encoding.base64
+import encoding.json
 
 import ublox_gnss
 
@@ -24,11 +28,10 @@ import pixel_display show *
 import pixel_display.two_color show *
 import pixel_display.histogram show *
 
-import encoding.base64
 import math
 
 // Cellular 
-APN ::= "iot.1nce.net"
+APN ::= "iot.1nce.net" //For 1NCE SIM card
 BANDS ::= [ 20, 8 ]
 RATS ::= null
 
@@ -37,6 +40,12 @@ RX_PIN_NUM  ::= 23
 RTS_PIN_NUM ::= 19
 CTS_PIN_NUM ::= 18
 PWR_ON_NUM  ::= 27
+
+pwr_on := gpio.Pin PWR_ON_NUM
+tx     := gpio.Pin TX_PIN_NUM
+rx     := gpio.Pin RX_PIN_NUM
+rts    := gpio.Pin RTS_PIN_NUM
+cts    := gpio.Pin CTS_PIN_NUM
 
 logger ::= log.default
 
@@ -63,12 +72,17 @@ main:
     --cs=gpio.Pin 4
     --frequency=1_000_000
     --dc=gpio.Pin 2
+
   i2c_bus := i2c.Bus
    --sda=gpio.Pin 12
    --scl=gpio.Pin 13
    --frequency=100000
   
   oled_scale := 6
+  oled_x := 1
+  oled_y := 25
+  oled_w := 127
+  oled_h := 63 - oled_y
 
   oled_device := i2c_bus.device I2C_ADDRESS
   sensor := bno055 oled_device
@@ -102,7 +116,6 @@ main:
 
   while true:
     arm_pin = ARMpin.get
-    //sleep --ms=1 //to avoid detecing movement due to toggle switch.
     if arm_pin == 1: //go into armed state
       armed_state display sensor i2c_bus
       //Re-initialize display text objects after returning from armed_state.
@@ -118,7 +131,6 @@ main:
     euler        = sensor.read_euler
     linacc       = sensor.read_linear_acceleration
     
-    //print_ "$(%6.1d euler[0]), $(%6.1d euler[1]), $(%6.1d euler[2])"
     pitch := -1 * euler[1].to_int
     x_acc := -1 * linacc[0] // -1 <--- Change axis orientation.
     
@@ -144,7 +156,7 @@ main:
     pitch_text.text = "$(%4d pitch)° / $(%2d max_pitch)°"
     x_acc_text.text = "$(%5.1f x_acc) / $(%3.1f max_acc) / $(%3.1f max_break)"
 
-    print_ x_acc
+    print_ "$(%5.2f x_acc)"
 
     if x_acc < 0.1 and x_acc > -0.1 : x_acc = 0.2 //
     if x_acc >= 0.0: 
@@ -203,7 +215,14 @@ armed_state display sensor i2c_bus:
   display.draw
   sleep --ms=2000
   display.remove_all
-  cellular_driver.close
+  if cellular_driver:
+    print_ "armed_state: closing cellular driver"
+    cellular_driver.close
+    cellular_driver = null
+  if cellular_network_interface:
+    print_ "armed_state: Nullifying cellular_network_interface"
+    cellular_network_interface = null
+
 
 track_position i2c_bus display:
   location := null
@@ -217,6 +236,7 @@ track_position i2c_bus display:
   print_ "Getting position..."
   position_text := display.text sans_context_08 12 61 "Aquiring GPS signal"
   display.draw
+
   while location == null and arm_pin == 1:
     location = gps_driver.location //--blocking
     display.remove position_text
@@ -225,25 +245,29 @@ track_position i2c_bus display:
     sleep --ms=1000
     counter2 += 1
     arm_pin = ARMpin.get
-  
+
   print_ "TTFF: $(gps_driver.time_to_first_fix)"
+
   while arm_pin == 1:
     print_ "Location: $location"
     display.remove position_text
     display.text sans_context_08 1 50 "Last known position:"
-    position_text = display.text sans_context_08 1 62 "$counter-$location.stringify" //"55.60357N, 13.01929E" //location.stringify
+    position_text = display.text sans_context_08 1 62 "$counter-$location.stringify"
     display.draw
     if counter % position_reporting_interval == 0: 
       display.remove position_text
       position_text = display.text sans_context_08 1 62 "Transmitting..."
       display.draw
-      send_alert_twilio cellular_network_interface "Last known motorcycle location: $location.stringify"
+      send_to_spreadsheet cellular_network_interface location.stringify
+
       counter = position_reporting_interval
     sleep --ms=1000
     arm_pin = ARMpin.get
     location = gps_driver.location //--blocking
     counter -= 1
+
   gps_driver.close
+  gps_device.close
 
 connect_to_cellular:
   if not cellular_driver: cellular_driver = create_driver
@@ -251,16 +275,9 @@ connect_to_cellular:
   cellular_network_interface = cellular_driver.network_interface
 
 create_driver -> Monarch:
-  pwr_on := gpio.Pin PWR_ON_NUM
   pwr_on.config --output --open_drain
   pwr_on.set 1
-  tx := gpio.Pin TX_PIN_NUM
-  rx := gpio.Pin RX_PIN_NUM
-  rts := gpio.Pin RTS_PIN_NUM
-  cts := gpio.Pin CTS_PIN_NUM
-
   port := uart.Port --tx=tx --rx=rx --rts=rts --cts=cts --baud_rate=cellular.Cellular.DEFAULT_BAUD_RATE
-
   return Monarch port --logger=logger
 
 connect driver/cellular.Cellular -> bool:
@@ -289,8 +306,8 @@ connect driver/cellular.Cellular -> bool:
 send_alert_twilio network_interface/net.Interface message/string:
   my_host ::= "api.twilio.com"
   my_port ::= 443
-  credentials := base64.encode "twiliousername:twiliopwd"
-  data := "To=+46123456789&From=+1123456789&MessagingServiceSid=MyServiceSID&Body=$message".to_byte_array
+  credentials := base64.encode "YourTwilio:Credentials"
+  data := "To=+123456789&From=+1234567890&MessagingServiceSid=MessagingServiceSIDfromTwilio&Body=$message".to_byte_array
 
   client := http.Client.tls network_interface
       --root_certificates=[certificate_roots.DIGICERT_GLOBAL_ROOT_CA]
@@ -302,12 +319,28 @@ send_alert_twilio network_interface/net.Interface message/string:
     data
     --host=my_host 
     --port=my_port
-    --path="/2010-04-01/Accounts/MyTwilioAccountID/Messages.json"
+    --path="/2010-04-01/Accounts/YourAccount/Messages.json"
     --headers=headers
 
   print_ "HTTP Response code: $response.status_code"
 
   data2 := #[]
-  while chunk := response.body.read: 
+  while chunk := response.body.read:
     data2 += chunk
   print_ data2.to_string
+
+send_to_spreadsheet network_interface/net.Interface location/string:
+  HOST ::= "script.google.com"
+  APP_ID ::= "YourAppID"
+  PATH ::= "/macros/s/$APP_ID/exec"
+  EMAIL ::= "your@email.com"
+
+  location = "$location[0..10]$location[11..20]" //Remove space.
+
+  catch --trace:
+    client := http.Client.tls network_interface --server_name=HOST --root_certificates=[certificate_roots.GLOBALSIGN_ROOT_CA]
+    parameters := "email=$EMAIL&id=Sheet1&Location=$location"
+    response := client.get HOST "$PATH?$parameters"
+    bytes := #[]
+    while chunk := response.body.read: bytes += chunk
+    print bytes.to_string
