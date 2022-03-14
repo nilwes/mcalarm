@@ -31,7 +31,7 @@ import pixel_display.histogram show *
 import math
 
 // Cellular 
-APN ::= "iot.1nce.net" //For 1NCE SIM card
+APN ::= "iot.1nce.net"
 BANDS ::= [ 20, 8 ]
 RATS ::= null
 
@@ -246,8 +246,6 @@ track_position i2c_bus display:
     counter2 += 1
     arm_pin = ARMpin.get
 
-  print_ "TTFF: $(gps_driver.time_to_first_fix)"
-
   while arm_pin == 1:
     print_ "Location: $location"
     display.remove position_text
@@ -263,7 +261,7 @@ track_position i2c_bus display:
       counter = position_reporting_interval
     sleep --ms=1000
     arm_pin = ARMpin.get
-    location = gps_driver.location //--blocking
+    location = gps_driver.location
     counter -= 1
 
   gps_driver.close
@@ -307,7 +305,7 @@ send_alert_twilio network_interface/net.Interface message/string:
   my_host ::= "api.twilio.com"
   my_port ::= 443
   credentials := base64.encode "YourTwilio:Credentials"
-  data := "To=+123456789&From=+1234567890&MessagingServiceSid=MessagingServiceSIDfromTwilio&Body=$message".to_byte_array
+  data := "To=+1234567890&From=+1987654321&MessagingServiceSid=YourMessagingServiceSID&Body=$message".to_byte_array
 
   client := http.Client.tls network_interface
       --root_certificates=[certificate_roots.DIGICERT_GLOBAL_ROOT_CA]
@@ -319,7 +317,7 @@ send_alert_twilio network_interface/net.Interface message/string:
     data
     --host=my_host 
     --port=my_port
-    --path="/2010-04-01/Accounts/YourAccount/Messages.json"
+    --path="/2010-04-01/Accounts/YourTwilioAccountID/Messages.json"
     --headers=headers
 
   print_ "HTTP Response code: $response.status_code"
@@ -331,7 +329,7 @@ send_alert_twilio network_interface/net.Interface message/string:
 
 send_to_spreadsheet network_interface/net.Interface location/string:
   HOST ::= "script.google.com"
-  APP_ID ::= "YourAppID"
+  APP_ID ::= "YourGoogleAppID"
   PATH ::= "/macros/s/$APP_ID/exec"
   EMAIL ::= "your@email.com"
 
